@@ -25,6 +25,14 @@ pub fn is_char(ch: char, input: &str) -> ParseResult<()> {
     }
 }
 
+/// Matches any character and returns the match in the result.
+pub fn any_char(input: &str) -> ParseResult<char> {
+    match input.chars().next() {
+        Some(next) => Ok((&input[next.len_utf8()..], next)),
+        _ => Err(input),
+    }
+}
+
 /// Matches a string literal.
 pub fn is_literal<'a>(expected: &'a str) -> impl Parser<'a, ()> {
     move |input: &'a str| match input.get(0..expected.len()) {
@@ -145,6 +153,29 @@ where
     }
 }
 
+/// Consumes the parsed result only if the predicate is true otherwise
+/// it returns the complete input as part of Err.
+pub fn pred<'a, P, A, F>(parser: P, predicate: F) -> impl Parser<'a, A>
+where
+    P: Parser<'a, A>,
+    F: Fn(&A) -> bool,
+{
+    move |input| {
+        if let Ok((next_input, result)) = parser.parse(input) {
+            if predicate(&result) {
+                return Ok((next_input, result));
+            }
+        }
+
+        Err(input)
+    }
+}
+
+/// Utility parser that consumes all whitespace and returns it in a vector.
+pub fn space<'a>() -> impl Parser<'a, Vec<char>> {
+    zero_or_more(pred(any_char, |c| c.is_whitespace()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,6 +184,12 @@ mod tests {
     fn test_is_char() {
         assert_eq!(is_char('a', "abc"), Ok(("bc", ())));
         assert_eq!(is_char('a', "xbc"), Err("xbc"));
+    }
+
+    #[test]
+    fn test_any_char() {
+        assert_eq!(any_char("cat"), Ok(("at", 'c')));
+        assert_eq!(any_char(" at"), Ok(("at", ' ')));
     }
 
     #[test]
@@ -202,5 +239,20 @@ mod tests {
         assert_eq!(parser.parse("nomnom"), Ok(("", vec![(), ()])));
         assert_eq!(parser.parse("monmon"), Ok(("monmon", vec![])));
         assert_eq!(parser.parse(""), Ok(("", vec![])));
+    }
+
+    #[test]
+    fn test_pred_combinator() {
+        let parser = pred(any_char, |c| *c == '-');
+        assert_eq!(parser.parse("-1"), Ok(("1", '-')));
+        assert_eq!(parser.parse("1-"), Err("1-"));
+    }
+
+    #[test]
+    fn test_space() {
+        let parser = space();
+        assert_eq!(parser.parse(" abc"), Ok(("abc", vec![' '])));
+        assert_eq!(parser.parse("  "), Ok(("", vec![' ', ' '])));
+        assert_eq!(parser.parse("abc"), Ok(("abc", vec![])));
     }
 }
