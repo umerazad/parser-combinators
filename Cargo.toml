@@ -1,0 +1,6 @@
+[package]
+name = "parser-combinators"
+version = "0.0.1"
+authors = ["Muhammad Umer Azad <umer@fastmail.com>"]
+edition = "2018"
+description = "Playground for parser combinator in Rust."
