@@ -105,6 +105,46 @@ where
     map(pair(parser1, parser2), |(_left, right)| right)
 }
 
+/// Consumes one or more tokens.
+pub fn one_or_more<'a, P, A>(parser: P) -> impl Parser<'a, Vec<A>>
+where
+    P: Parser<'a, A>,
+{
+    move |mut input| {
+        let mut result = Vec::new();
+
+        if let Ok((next_input, first)) = parser.parse(input) {
+            input = next_input;
+            result.push(first);
+        } else {
+            return Err(input);
+        }
+
+        while let Ok((next_input, item)) = parser.parse(input) {
+            input = next_input;
+            result.push(item);
+        }
+        Ok((input, result))
+    }
+}
+
+/// Consumes zero or more.
+pub fn zero_or_more<'a, P, A>(parser: P) -> impl Parser<'a, Vec<A>>
+where
+    P: Parser<'a, A>,
+{
+    move |mut input| {
+        let mut result = Vec::new();
+
+        while let Ok((next_input, item)) = parser.parse(input) {
+            input = next_input;
+            result.push(item);
+        }
+
+        Ok((input, result))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,5 +186,21 @@ mod tests {
         );
 
         assert_eq!(tag_opener.parse("<!oops"), Err("!oops"));
+    }
+
+    #[test]
+    fn test_one_or_more() {
+        let parser = one_or_more(is_literal("nom"));
+        assert_eq!(parser.parse("nomnom"), Ok(("", vec![(), ()])));
+        assert_eq!(parser.parse("monmon"), Err("monmon"));
+        assert_eq!(parser.parse(""), Err(""));
+    }
+
+    #[test]
+    fn test_zero_or_more() {
+        let parser = zero_or_more(is_literal("nom"));
+        assert_eq!(parser.parse("nomnom"), Ok(("", vec![(), ()])));
+        assert_eq!(parser.parse("monmon"), Ok(("monmon", vec![])));
+        assert_eq!(parser.parse(""), Ok(("", vec![])));
     }
 }
